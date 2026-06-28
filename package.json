@@ -1,0 +1,32 @@
+{
+  "name": "claude-remote-lib",
+  "version": "0.1.0",
+  "description": "Claude-agnostic bridge library: speaks Claude's remote-control server protocol so your own code can appear as a session in the Claude app / claude.ai, without calling Claude inference.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "example:echo": "tsx examples/echo-bot.ts"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  },
+  "license": "MIT"
+}
