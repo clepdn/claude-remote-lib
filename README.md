@@ -7,10 +7,10 @@ the library handles the wire protocol.
 
 ```
    ┌────────────┐  OAuth       ┌─────────────┐  worker_jwt  ┌──────────┐
-   │ your code │ ───────────▶ │ Claude API  │ ───────────▶ │  worker  │
+   │ your code  │ ──────────▶  │ Claude API  │ ──────────▶  │  worker  │
    │ (inference)│ ◀──────────  │ /v1/code/   │ ◀──────────  │ SSE+POST │
-   └────────────┘  onInbound   │  sessions   │  assistant    └──────────┘
-        ▲                         └─────────────┘  message
+   └────────────┘  onInbound   │  sessions   │  assistant   └──────────┘
+        ▲                      └─────────────┘  message
         │  you produce the reply with ANY model. The library never touches Claude the model.
 ```
 
@@ -31,9 +31,16 @@ the library handles the wire protocol.
 
 ## Install
 
+Not published to npm. Install directly from the git repo:
+
 ```bash
-npm install claude-remote-lib    # (or local: npm install && npm run build)
+npm install github:clepdn/claude-remote-lib
+# pin to a tag in real projects:
+npm install github:clepdn/claude-remote-lib#v0.1.0
 ```
+
+The package's `prepare` script runs `tsc` automatically after install, so
+consumers get a built `dist/` without you having to commit it.
 
 Requires Node ≥ 18.17 (native `fetch` + streaming). Zero runtime dependencies.
 
@@ -156,7 +163,3 @@ end-to-end against the live Claude servers with a real claude.ai OAuth token:
 - Full loop: user typed in claude.ai → SSE delivered it → host replied → reply rendered in the app. **No Claude inference anywhere.**
 
 The `Bridge` class mirrors the verified standalone probe (`scripts/probe-worker.mjs`, `scripts/e2e-listen.mjs`) but has not itself been run live as a unit — the logic is identical, so behavior should transfer. If something doesn't connect, the likely culprits are the base URL (`apiBaseUrl`, defaults to `https://api.anthropic.com`), a missing `trustedDeviceToken`, or an expired OAuth token (the probes refresh automatically).
-
-## License
-
-MIT.
