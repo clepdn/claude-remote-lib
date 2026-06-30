@@ -31,9 +31,16 @@ the library handles the wire protocol.
 
 ## Install
 
+Not published to npm. Install directly from the git repo:
+
 ```bash
-npm install claude-remote-lib    # (or local: npm install && npm run build)
+npm install github:clepdn/claude-remote-lib
+# pin to a tag in real projects:
+npm install github:clepdn/claude-remote-lib#v0.1.0
 ```
+
+The package's `prepare` script runs `tsc` automatically after install, so
+consumers get a built `dist/` without you having to commit it.
 
 Requires Node ≥ 18.17 (native `fetch` + streaming). Zero runtime dependencies.
 
