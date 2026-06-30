@@ -27,8 +27,11 @@ export type { IngressCallbacks } from './ingress.js'
 
 export {
   createCodeSession,
+  fetchOrganizationUuid,
   fetchRemoteCredentials,
   registerWorker,
+  toCompatSessionId,
+  updateSessionTitle,
   buildSessionUrl,
   DEFAULT_API_BASE_URL,
   DEFAULT_SESSION_TIMEOUT_MS,

@@ -26,8 +26,10 @@ import {
   buildSessionUrl,
   createCodeSession,
   DEFAULT_API_BASE_URL,
+  fetchOrganizationUuid,
   fetchRemoteCredentials,
   registerWorker,
+  updateSessionTitle,
   type RemoteCredentials,
 } from './codeSessionApi.js'
 import { IngressRouter, type IngressCallbacks } from './ingress.js'
@@ -90,10 +92,15 @@ export class Bridge {
   private refreshScheduler: TokenRefreshScheduler | null = null
   private started = false
   private stopping = false
+  /** Cached org UUID for setTitle(); lazily fetched on first rename. */
+  private orgUuid: string | null = null
+  /** Last title we successfully set, so repeat setTitle(sameValue) no-ops. */
+  private currentTitle: string | null = null
 
   constructor(opts: BridgeOptions) {
     this.opts = opts
     this.log = opts.log ?? (() => {})
+    this.currentTitle = opts.title ?? null
     this.router = new IngressRouter({
       onInboundMessage: msg => this.handleInbound(msg),
       onControlRequest: req => this.handleControlRequest(req),
@@ -201,6 +208,36 @@ export class Bridge {
     const enriched = this.enrichOutbound(message)
     this.router.markPosted(enriched.uuid)
     await this.transport.write(enriched)
+  }
+
+  /**
+   * Update the session title displayed in claude.ai. Lazily fetches the org
+   * UUID on first call and caches it (it's stable per account, cheap to
+   * re-fetch if it ever changes). Repeat calls with the same title no-op.
+   *
+   * Wire: PATCH /v1/sessions/{compatId} with `{title}`. See
+   * `updateSessionTitle` for the full header set.
+   */
+  async setTitle(title: string): Promise<void> {
+    if (!this.sessionId) {
+      throw new Error('Bridge not started — setTitle requires an active session')
+    }
+    if (title === this.currentTitle) return
+    const apiBaseUrl = this.opts.apiBaseUrl ?? DEFAULT_API_BASE_URL
+    const accessToken = await this.opts.getAccessToken()
+    if (!this.orgUuid) {
+      this.orgUuid = await fetchOrganizationUuid(apiBaseUrl, accessToken)
+      this.log(`fetched org uuid for title updates`)
+    }
+    await updateSessionTitle(
+      apiBaseUrl,
+      this.sessionId,
+      title,
+      accessToken,
+      this.orgUuid,
+    )
+    this.currentTitle = title
+    this.log(`session title set to ${JSON.stringify(title)}`)
   }
 
   /** Convenience: send a plain-text assistant turn. */

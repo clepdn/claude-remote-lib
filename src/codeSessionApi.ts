@@ -182,6 +182,101 @@ export async function registerWorker(
   return epoch
 }
 
+/**
+ * Re-tag a `cse_*` session id to `session_*` for use with the v1 compat
+ * session-management API. Endpoints under `/v1/sessions/{id}` (e.g. PATCH for
+ * title) only accept the `session_*` form even though `/bridge` issues the
+ * v2 `cse_*` form. Idempotent on already-compat ids.
+ *
+ * Mirrors Claude Code's `toCompatSessionId` (bridge/sessionIdCompat.ts).
+ */
+export function toCompatSessionId(id: string): string {
+  if (id.startsWith('cse_')) return 'session_' + id.slice('cse_'.length)
+  return id
+}
+
+/**
+ * GET /api/oauth/profile — returns the OAuth user's profile, including the
+ * organization UUID required as `x-organization-uuid` on session-management
+ * calls (e.g. updateSessionTitle).
+ *
+ * Cheap and cacheable per-session; call once and reuse.
+ */
+export async function fetchOrganizationUuid(
+  baseUrl: string,
+  accessToken: string,
+  timeoutMs: number = 10_000,
+): Promise<string> {
+  const url = `${baseUrl.replace(/\/+$/, '')}/api/oauth/profile`
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!response.ok) {
+    const detail = await safeErrorDetail(response)
+    throw new Error(
+      `fetchOrganizationUuid failed ${response.status}${detail ? `: ${detail}` : ''}`,
+    )
+  }
+  const data = (await response.json()) as {
+    organization?: { uuid?: unknown }
+  }
+  const uuid = data?.organization?.uuid
+  if (typeof uuid !== 'string' || !uuid) {
+    throw new Error(
+      `fetchOrganizationUuid: no organization.uuid in response: ${JSON.stringify(data).slice(0, 200)}`,
+    )
+  }
+  return uuid
+}
+
+/**
+ * PATCH /v1/sessions/{compatId} — rename the session shown in claude.ai.
+ *
+ * Requires:
+ *  - OAuth `Authorization: Bearer <accessToken>`
+ *  - `anthropic-beta: ccr-byoc-2025-07-29`
+ *  - `x-organization-uuid: <orgUuid>` (fetched separately via
+ *    `fetchOrganizationUuid`; cache it on your end — it's stable per account)
+ *  - the v1 compat session id (`session_*`); `toCompatSessionId` retags v2
+ *    `cse_*` ids automatically.
+ *
+ * Mirrors Claude Code's `updateBridgeSessionTitle` (bridge/createSession.ts).
+ */
+export async function updateSessionTitle(
+  baseUrl: string,
+  sessionId: string,
+  title: string,
+  accessToken: string,
+  orgUuid: string,
+  timeoutMs: number = 10_000,
+): Promise<void> {
+  const compatId = toCompatSessionId(sessionId)
+  const url = `${baseUrl.replace(/\/+$/, '')}/v1/sessions/${compatId}`
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'anthropic-version': ANTHROPIC_VERSION,
+      'anthropic-beta': 'ccr-byoc-2025-07-29',
+      'x-organization-uuid': orgUuid,
+    },
+    body: JSON.stringify({ title }),
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!response.ok) {
+    const detail = await safeErrorDetail(response)
+    throw new Error(
+      `updateSessionTitle failed ${response.status}${detail ? `: ${detail}` : ''}`,
+    )
+  }
+}
+
 async function safeErrorDetail(response: Response): Promise<string | undefined> {
   try {
     const data = (await response.json()) as unknown
